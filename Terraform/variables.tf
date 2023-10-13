@@ -1,16 +1,16 @@
 variable "region" {
   description = "AWS region"
-  default     = us-east-1
+  default     = "us-east-1"
 }
 
 variable "key_name" {
   description = "Key pair name"
-  default     = cka-key
+  default     = "cka-key"
 }
 
 variable "instance_type" {
   description = "EC2 instance type"
-  default     = t2.micro
+  default     = "t2.micro"
 }
 
 variable "instance_count" {
@@ -20,6 +20,6 @@ variable "instance_count" {
 
 variable "username" {
   description = "Username for SSH connections"
-  default     = ec2-user
+  default     = "ec2-user"
 }
 
