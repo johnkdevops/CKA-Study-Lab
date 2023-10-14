@@ -1,12 +1,6 @@
 # AWS Key-Pairs
-resource "tls_private_key" "cka-key" {
-  algorithm = "RSA"
-  rsa_bits  = 4096
-}
-
-resource "aws_key_pair" "deployer" {
-  key_name   = var.key_name
-  public_key = tls_private_key.cka-key.public_key_openssh
+resource "aws_key_pair" "ckakey" {
+  public_key = file("/home/cloud-user/cka_key.pub")
 }
 
 # Controlplane Nodes
@@ -16,7 +10,8 @@ resource "aws_instance" "controlplane" {
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.cka-subnet.id
   vpc_security_group_ids = [aws_security_group.cka-sg.id]
-  key_name               = aws_key_pair.deployer.key_name
+  key_name               = aws_key_pair.ckakey.id
+  associate_public_ip_address = true
 
   tags = {
     Name = "controlplane-${count.index}"
@@ -30,7 +25,8 @@ resource "aws_instance" "workernode" {
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.cka-subnet.id
   vpc_security_group_ids = [aws_security_group.cka-sg.id]
-  key_name               = aws_key_pair.deployer.key_name
+  key_name               = aws_key_pair.ckakey.id
+  associate_public_ip_address = true
 
   tags = {
     Name = "workernode-${count.index}"
@@ -44,7 +40,8 @@ resource "aws_instance" "loadbalancer" {
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.cka-subnet.id
   vpc_security_group_ids = [aws_security_group.cka-sg.id]
-  key_name               = aws_key_pair.deployer.key_name
+  key_name               = aws_key_pair.ckakey.id
+  associate_public_ip_address = true
 
   tags = {
     Name = "loadbalancer-${count.index}"
