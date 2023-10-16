@@ -13,7 +13,15 @@ ln -s ~/.tfenv/bin/* ~/bin
 tfenv install 1.6.1
 tfenv use 1.6.1
 
-# Check the Terraform version
-terraform -v
+# If Terraform installation succeeded, install Ansible
+if terraform -v | grep -q 'Terraform v'; then
+    sudo yum -y update
+    sudo amazon-linux-extras install epel -y
+    sudo yum install ansible -y
+    ansible --version
+else
+    echo "Terraform installation failed."
+    exit 1
+fi
 
 
