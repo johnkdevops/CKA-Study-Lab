@@ -1,0 +1,133 @@
+---
+- hosts: controlplane
+  become: yes
+  tasks:
+    - name: Load necessary modules
+      shell: |
+        cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
+        br_netfilter
+        EOF
+
+    - name: Ensure net.bridge.bridge-nf-call-ip6tables is set
+      sysctl:
+        name: net.bridge.bridge-nf-call-ip6tables
+        value: 1
+        state: present
+        reload: yes
+
+    - name: Ensure net.bridge.bridge-nf-call-iptables is set
+      sysctl:
+        name: net.bridge.bridge-nf-call-iptables
+        value: 1
+        state: present
+        reload: yes
+
+    - name: Turn off swap
+      command: swapoff -a
+
+    - name: Ensure no swap entry in fstab
+      lineinfile:
+        path: /etc/fstab
+        regexp: '.*swap.*'
+        state: absent
+
+    - name : Update all packages
+      yum: name=* state=latest update_cache=true
+
+    - name: Install necessary tools
+      yum:
+        name: ['curl', 'wget', 'git']
+        state: present
+
+    - name: Install Containerd
+      yum:
+        name: containerd
+        state: present
+
+    - name: Install required packages for Docker
+      yum:
+        name: ['yum-utils', 'device-mapper-persistent-data', 'lvm2']
+        state: present
+
+    - name: Enable EPEL repository
+      command:
+        cmd: amazon-linux-extras enable epel
+        warn: no
+
+    - name: Add Docker repository
+      command: yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+      args:
+        creates: /etc/yum.repos.d/docker-ce.repo
+
+    - name: Install Docker
+      yum:
+        name: docker
+        state: present
+
+    - name: Show Docker version
+      command: docker version
+      register: output
+
+    - name: Print Docker version
+      debug:
+        var: output.stdout_lines
+
+    - name: Add Kubernetes repository
+      yum_repository:
+        name: Kubernetes
+        description: Kubernetes Repository
+        baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+        enabled: yes
+        gpgkey:
+           - https://packages.cloud.google.com/yum/doc/yum-key.gpg
+           - https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+
+    - name: Install kubernetes
+      amazon-linux-extras:
+        name: kubernetes1.27
+        state: present
+
+    - name: Enable and start kubelet
+      service:
+        name: kubelet
+        enabled: yes
+        state: started
+
+    - name: Initialize Kubernetes Cluster
+      command: kubeadm init --pod-network-cidr=10.244.0.0/16
+
+    - name: Apply Flannel network
+      command: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/v0.9.1/Documentation/kube-flannel.yml
+
+    - name: Download Flannel config
+      get_url:
+        url: https://raw.githubusercontent.com/coreos/flannel/v0.9.1/Documentation/kube-flannel.yml
+        dest: /root/kube-flannel.yml
+
+    - name: Update Flannel config with --iface=eth0
+      lineinfile:
+        path: /root/kube-flannel.yml
+        insertafter: 'args:'
+        line: '        - --iface=eth0'
+
+    - name: Apply modified Flannel config
+      command: kubectl apply -f /root/kube-flannel.yml
+
+    - name: Check nodes are ready
+      shell: kubectl get nodes | grep -i ' Ready'
+      register: result
+      until: result.stdout
+      retries: 20
+      delay: 30
+
+    - name: Show the Kubernetes nodes
+      debug:
+        msg:
+          - "Kubernetes nodes:"
+          - "{{ result.stdout_lines }}"
+
+  handlers:
+    - name: Start Docker
+      service:
+        name: docker
+        state: started
