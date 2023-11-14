@@ -1,32 +1,24 @@
-data "aws_ami_ids" "amazon" {
-  owners = ["amazon"]
 
-  filter {
-    name   = "name"
-    values = ["/aws/service/ami-amazon-linux-latest/amzn-ami-hvm-x86_64-gp2"]
-  }
-}
+# Canonical, Ubuntu, 20.04 LTS, amd64 focal image
+data "aws_ami" "ubuntu" {
 
-# AWS AMI
-data "aws_ami" "amazon-linux-2" {
   most_recent = true
 
-
-  filter {
-    name   = "owner-alias"
-    values = ["amazon"]
-  }
-
   filter {
     name   = "name"
-    values = ["al2023-ami*"]
+    values = ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]
   }
 
   filter {
-    name   = "architecture"
-    values = ["x86_64"]
+    name   = "virtualization-type"
+    values = ["hvm"]
   }
+
+  owners = ["099720109477"]
 }
+
+# # Get all Availability zones in region
+# data "aws_availability_zones" "available_zones" {}
 
 # Get the default VPC details
 data "aws_vpc" "default_vpc" {
@@ -42,26 +34,60 @@ data "aws_subnets" "public" {
   filter {
     name = "availability-zone"
     values = [
-      "${var.aws_region}a",
-      "${var.aws_region}b",
-      "${var.aws_region}c"
+      "${var.aws_region[0]}a",
+      "${var.aws_region[0]}b",
+      "${var.aws_region[0]}c"
     ]
   }
 }
 
-data "local_file" "os_type" {
-  depends_on = [null_resource.os_type]
-  filename   = "${path.module}/os.txt"
+# data "aws_subnets" "private" {
+#   filter {
+#     name   = "vpc-id"
+#     values = [data.aws_vpc.default_vpc.id]
+#   }
+#   filter {
+#     name = "availability-zone"
+#     values = [
+#       "${var.aws_region[0]}a",
+#       "${var.aws_region[0]}b",
+#       "${var.aws_region[0]}c"
+#     ]
+#   }
+# }
+
+data "aws_instance" "loadbalancer_instances" {
+  count = var.load_balancer_count
+
+  instance_id = aws_instance.loadbalancer[count.index].id
 }
+
+data "aws_instance" "controlplane_instances" {
+  count = var.control_plane_count
+
+  instance_id = aws_instance.controlplane[count.index].id
+}
+
+data "aws_instance" "workernode_instances" {
+  count = var.worker_node_count
+
+  instance_id = aws_instance.workernode[count.index].id
+}
+
+
+data "localos_folders" "folders" {}
+
 data "template_file" "inventory" {
   template = file("${path.module}/inventory.tpl")
 
   vars = {
-    controlplane = join(",", [for instance in aws_instance.controlplane : instance.public_ip])
+    masternode   = join(",", [for instance in aws_instance.controlplane : instance.public_ip if instance.tags.Name == "cluster1-controlplane01"])
+    controlplane = join(",", [for instance in aws_instance.controlplane : instance.public_ip if instance.id != aws_instance.controlplane[0].id])
     workernode   = join(",", [for instance in aws_instance.workernode : instance.public_ip])
-    loadbalancer = aws_instance.loadbalancer[0].public_ip
+    loadbalancer = join(",", [for instance in aws_instance.loadbalancer : instance.public_ip])
     key_name     = var.key_name
   }
 }
+
 
 

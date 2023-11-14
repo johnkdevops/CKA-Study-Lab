@@ -1,24 +1,191 @@
 resource "aws_default_vpc" "default" {}
 
-resource "aws_security_group" "cka-sg" {
-  name        = "cka-sg"
-  description = "Allow SSH and HTTP inbound traffic"
+resource "aws_security_group" "cka-master-sg" {
+  name        = "cka-master-sg"
+  description = "Allow all connections necessary for controlplane nodes"
   vpc_id      = aws_default_vpc.default.id
 
   ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    description      = "Allow SSH"
+    from_port        = 22
+    to_port          = 22
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
   }
 
   ingress {
-    description = "HTTP"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
+    description      = "Allow HTTP"
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "Kubernetes API Server"
+    from_port        = 6443
+    to_port          = 6443
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "ETCD Server Client API"
+    from_port        = 2379
+    to_port          = 2380
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "Kubelet API, Kube-scheduler, Kube-controller-manager, Read_Only Kubelet API, Kubelet health"
+    from_port        = 10248
+    to_port          = 10260
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "NodePort Services"
+    from_port        = 30000
+    to_port          = 32767
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "flannel CNI"
+    from_port        = 8285
+    to_port          = 8285
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "flannel CNI"
+    from_port        = 8285
+    to_port          = 8285
+    protocol         = "udp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+  } 
+  tags = {
+    Name = "cka-master-sg"
+  }
+}
+resource "aws_security_group" "cka-worker-sg" {
+  name        = "cka-worker-sg"
+  description = "Allow all connections necessary for worker nodes"
+  vpc_id      = aws_default_vpc.default.id
+
+  ingress {
+    description      = "Allow SSH"
+    from_port        = 22
+    to_port          = 22
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "Allow HTTP"
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+  ingress {
+    description      = "Kubelet API"
+    from_port        = 10250
+    to_port          = 10250
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "NodePort Services"
+    from_port        = 30000
+    to_port          = 32767
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "flannel CNI"
+    from_port        = 8285
+    to_port          = 8285
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "flannel CNI"
+    from_port        = 8285
+    to_port          = 8285
+    protocol         = "udp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "cka-worker-sg"
+  }
+}
+
+resource "aws_security_group" "cka-lb-sg" {
+  name        = "cka-lb-sg"
+  description = "Allow all connections necessary for load balancer"
+  vpc_id      = aws_default_vpc.default.id
+
+  ingress {
+    description      = "Allow SSH"
+    from_port        = 22
+    to_port          = 22
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "Allow HTTP"
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "Allow HTTPS"
+    from_port        = 443
+    to_port          = 443
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
   }
 
   egress {
@@ -29,67 +196,54 @@ resource "aws_security_group" "cka-sg" {
   }
 
   tags = {
-    Name = "cka-sg"
+    Name = "cka-lb-sg"
   }
 }
 
-## Create AWS Key Pairs
-resource "tls_private_key" "rsa_4096" {
- algorithm = "RSA"
- rsa_bits = 4096
+resource "aws_security_group" "cka-ansible-sg" {
+  name        = "cka-ansible-sg"
+  description = "Allow all connections necessary for load balancer"
+  vpc_id      = aws_default_vpc.default.id
+
+  ingress {
+    description      = "Allow SSH"
+    from_port        = 22
+    to_port          = 22
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "Allow HTTP"
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    description      = "Allow HTTPS"
+    from_port        = 443
+    to_port          = 443
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "cka-ansible-sg"
+  }
 }
 
-resource "aws_key_pair" "key_pair" {
- key_name  = var.key_name
- public_key = tls_private_key.rsa_4096.public_key_openssh
- lifecycle {
-  ignore_changes = ["public_key"]
- }
-}
 
-# Checks what OS Terraform is running on and creates a text with variable
-resource "null_resource" "os_type" {
- triggers = {
-  always_run = "${timestamp()}"
- }
- provisioner "local-exec" {
-  command = <<EOC
-  @echo off
-  echo Checking OS type...
-  if "%OS%" == "Windows_NT" (
-    echo Detected Windows
-    echo windows > os.txt
-  ) else (
-    echo Detected Linux
-    echo linux > os.txt
-  )
-  EOC
- }
-}
 
-locals {
- os_type  = trim(data.local_file.os_type.content, "\n")
- home_path = local.os_type == "windows" ? "C:/Users/Home" : "/root"
- key_path = "${local.home_path}/${var.key_name}"
-}
 
-# Copy the private key to my Home folder on my Local PC
-resource "local_file" "private_key" {
- filename    = local.key_path
- content     = tls_private_key.rsa_4096.private_key_pem
- file_permission = "0600"
-#  lifecycle {
-#    ignore_changes = [content]
-#  }
-}
-
-resource "null_resource" "copy_private_key" {
- depends_on = [aws_instance.ansiblecontroller]
- # Assumes you have the correct connection set up
- connection {
-  type    = "ssh"
-  user    = "ec2-user"
-  private_key = file(local.key_path)
-  host    = aws_instance.ansiblecontroller[0].public_ip
- }
-}
