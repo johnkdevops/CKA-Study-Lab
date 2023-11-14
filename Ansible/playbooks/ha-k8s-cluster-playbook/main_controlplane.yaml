@@ -1,0 +1,100 @@
+- name: Pull Kubernetes Images
+  command: kubeadm config images pull
+
+- name: Reset Kubernetes Cluster
+  command: kubeadm reset --force
+  ignore_errors: yes
+  
+- name: Bootstrap Kubernetes Cluster
+  command: |
+    kubeadm init \
+    --control-plane-endpoint="172.31.12.100:6443" \
+    --upload-certs \
+    --apiserver-advertise-address={{ hostvars['cluster1-controlplane01']['ansible_ssh_host'] }} \
+    --pod-network-cidr=10.244.0.0/16
+
+- name: Generate Join Token
+  command: kubeadm token create --print-join-command
+  register: join_token
+
+- name: Save Join Token to File
+  copy:
+    content: "{{ join_token.stdout }}"
+    dest: /tmp/join_token.txt
+
+- name: Copy Join Token from Master Node
+  fetch:
+    src: /tmp/join_token.txt
+    dest: /tmp/join_token.txt
+    flat: yes
+    fail_on_missing: yes
+    validate_checksum: yes
+  delegate_to: cluster1-controlplane01
+
+- name: Copy Join Token to Other Ansible Hosts
+  copy:
+    src: /tmp/join_token.txt
+    dest: /tmp/join_token.txt
+  delegate_to: "{{ groups['join_nodes'] }}"
+
+- name: Ensure /root/.kube directory exists
+  file:
+    path: /root/.kube
+    state: directory
+  
+- name: Copy kubeconfig to /root/.kube/config
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /root/.kube/config
+    owner: root
+    group: root
+    mode: '0644'
+    remote_src: yes
+  
+- name: Wait for Kubernetes API Server to start
+  wait_for:
+    host: localhost
+    port: 6443
+    delay: 10
+    timeout: 300
+
+- name: Apply Flannel network
+  k8s:
+    action: apply
+    src: https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+
+- name: Download Flannel config
+  get_url:
+    url: https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+    dest: /root/kube-flannel.yml
+
+- name: Apply Flannel network
+  command: kubectl apply -f /root/kube-flannel.yml
+
+- name: Update Flannel config with --iface=eth0
+  lineinfile:
+    path: /root/kube-flannel.yml
+    insertafter: 'args:'
+    line: '        - --iface=eth0'
+
+- name: Apply modified Flannel config
+  k8s:
+    action: apply
+    src: /root/kube-flannel.yml
+
+- name: Check nodes are ready
+  shell: kubectl get nodes | grep -i ' Ready'
+  register: result
+  until: result.stdout
+  retries: 20
+  delay: 30
+
+- name: Show the Kubernetes nodes
+  command: kubectl get nodes
+  register: result
+
+- name: Debug the output
+  debug:
+    var: result.stdout_lines
+        
+

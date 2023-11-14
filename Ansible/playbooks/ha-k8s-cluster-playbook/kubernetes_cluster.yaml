@@ -1,0 +1,45 @@
+
+- name: Setup HAProxy Load Balancer
+  hosts: loadbalancer
+  become: yes
+  gather_facts: false  
+  environment:
+    ANSIBLE_HOST_KEY_CHECKING: "False"
+  roles:
+    - haproxy
+
+- name: Setup Kubernetes Cluster
+  hosts: kube_nodes
+  become: yes
+  gather_facts: false  
+  environment:
+    ANSIBLE_HOST_KEY_CHECKING: "False"
+  roles:
+    - common
+
+- name: Setup Main Controlplane
+  hosts: cluster1-controlplane01
+  become: yes
+  gather_facts: false  
+  environment:
+    ANSIBLE_HOST_KEY_CHECKING: "False"
+  roles:
+    - masternode
+
+- name: Join All Other Controlplane Nodes
+  hosts: controlplane
+  become: yes
+  gather_facts: false  
+  environment:
+    ANSIBLE_HOST_KEY_CHECKING: "False"
+  roles:
+    - controlplane
+
+- name: Join Workernodes to Kubernetes Cluster
+  hosts: workernode
+  become: yes
+  gather_facts: false
+  environment:
+    ANSIBLE_HOST_KEY_CHECKING: "False"  
+  roles:
+    - workernode

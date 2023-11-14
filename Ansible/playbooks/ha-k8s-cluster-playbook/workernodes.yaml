@@ -1,0 +1,18 @@
+- name: Copy Join Token from Master Node
+  fetch:
+    src: /tmp/join_token.txt
+    dest: /tmp/join_token.txt
+    flat: yes
+    fail_on_missing: yes
+    validate_checksum: yes
+  delegate_to: cluster1-controlplane01
+
+- name: Join Worker Nodes to Cluster
+  command: |
+    kubeadm join \
+    --token="{{ lookup('file', '/tmp/join_token.txt') }}" \
+    --discovery-token-ca-cert-hash="{{ lookup('file', '/tmp/discovery_token_ca_cert_hash.txt') }}"
+  delegate_to: "{{ groups['workernode'][0] }}"
+  
+  
+    

@@ -1,0 +1,44 @@
+---
+# This role installs HAProxy and KeepAlived and configures loadbalancers
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+
+- name: Install KeepAlived & HAProxy
+  apt:
+    name:
+      - keepalived
+      - haproxy
+    state: present
+    update_cache: yes
+
+- name: Copy check_apiserver.sh script to the target host
+  copy:
+    src: files/check_apiserver.sh
+    dest: /home/ubuntu/check_apiserver.sh
+    mode: "0755" 
+
+- name: Configure KeepAlived on both Load Balancers
+  template:
+    src: keepalived.conf.j2
+    dest: /etc/keepalived/keepalived.conf
+
+- name: Start the keepalived service
+  systemd:
+    name: keepalived
+    state: started
+    enabled: yes
+
+- name: Configure HAProxy with Control Plane Nodes
+  template:
+    src: haproxy.cfg.j2 
+    dest: /etc/haproxy/haproxy.cfg 
+
+- name: Start the haproxy service
+  systemd:
+    name: haproxy
+    state: restarted
+    enabled: yes
+
+

@@ -1,0 +1,183 @@
+---
+# This role contains common plays that will run on kuberneter cluster nodes.
+
+- name: Set hostname
+  hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Disable swap temporarily and permanently
+  block:
+    - command: swapoff -a
+    - replace:
+        path: /etc/fstab
+        regexp: '.*swap.*'
+        replace: ''
+
+- name: Disable UFW Firewall
+  command: ufw disable
+
+- name: Create modules-load.d directory
+  file:
+    path: /etc/modules-load.d
+    state: directory
+
+- name: Create containerd.conf file
+  file:
+    path: /etc/modules-load.d/containerd.conf
+    state: touch
+
+- name: Add modules to containerd.conf
+  lineinfile:
+    path: /etc/modules-load.d/containerd.conf
+    line: "{{ item }}"
+  loop:
+    - overlay
+    - br_netfilter
+
+- name: Load kernel modules
+  command:
+    cmd: modprobe {{ item }}
+  loop:
+    - overlay
+    - br_netfilter
+
+- name: Set sysctl settings for Kubernetes
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_file: /etc/sysctl.conf
+    reload: yes
+  loop:
+    - { name: 'net.bridge.bridge-nf-call-ip6tables', value: '1' }
+    - { name: 'net.bridge.bridge-nf-call-iptables', value: '1' }
+    - { name: 'net.ipv4.ip_forward', value: '1' }
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+
+- name: Install containerd and apt-transport-https
+  apt:
+    name:
+      - containerd
+      - apt-transport-https
+    state: present
+
+- name: Create directory for containerd
+  file:
+    path: /etc/containerd
+    state: directory
+
+- name: Get containerd config
+  command: containerd config default > /etc/containerd/config.toml
+
+- name: Restart containerd service
+  service:
+    name: containerd
+    state: restarted
+    enabled: yes
+
+- name: Install necessary packages
+  apt:
+    name:
+      - wget
+      - git
+      - curl
+      - gnupg-agent
+      - software-properties-common
+    state: present
+    update_cache: yes
+
+- name: Download CNI plugins
+  become: yes
+  get_url:
+    url: https://github.com/containernetworking/plugins/releases/download/v1.2.0/cni-plugins-linux-amd64-v1.2.0.tgz
+    dest: /tmp/cni-plugins-linux-amd64-v1.2.0.tgz
+
+- name: Create CNI plugins directory
+  file:
+    path: /opt/cni/bin
+    state: directory
+
+- name: Extract CNI plugins
+  unarchive:
+    src: /tmp/cni-plugins-linux-amd64-v1.2.0.tgz
+    dest: /opt/cni/bin
+    remote_src: yes
+    creates: /opt/cni/bin/bridge
+
+- name: Download and install CRICTL
+  shell: >
+    VERSION="v1.28.0";
+    wget https://github.com/kubernetes-sigs/cri-tools/releases/download/$VERSION/crictl-$VERSION-linux-amd64.tar.gz;
+    sudo tar zxvf crictl-$VERSION-linux-amd64.tar.gz -C /usr/local/bin;
+    rm -f crictl-$VERSION-linux-amd64.tar.gz
+
+- name: Configure CRICTL
+  copy:
+    dest: /etc/crictl.yaml
+    content: |
+      runtime-endpoint: unix:/
+      image-endpoint: unix:/
+      timeout: 2
+      debug: false
+      pull-image-on-create: false
+
+- name: Ensure /etc/apt/keyrings directory exists
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Check if Kubernetes apt keyring exists and add if not present
+  block:
+    - stat:
+        path: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+      register: keyring
+
+    - shell: |
+        curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+      args:
+        warn: False
+      when: not keyring.stat.exists
+
+- name: Add Kubernetes signing key
+  apt_key:
+    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+    state: present
+
+- name: Add Kubernetes repository
+  apt_repository:
+    repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
+    state: present
+
+- name: Update APT package cache
+  apt:
+    update_cache: yes
+  
+- name: Install Kubernetes components
+  apt:
+    name: "{{ item }}"
+    state: latest
+    update_cache: yes
+  loop:
+    - kubeadm
+    - kubelet
+    - kubectl
+
+- name: Hold Kubernetes components version
+  dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - kubeadm
+    - kubelet
+    - kubectl
+
+- name: Enable and start kubelet service
+  systemd:
+    name: kubelet
+    enabled:
+
+    

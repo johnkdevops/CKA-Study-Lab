@@ -1,0 +1,8 @@
+---
+# Handlers for HAproxy
+
+- name: Restart HAProxy 
+  systemd:
+    name: haproxy 
+    state: restarted 
+    
